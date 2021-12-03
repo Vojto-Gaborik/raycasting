@@ -1,112 +1,86 @@
 import numpy as np
 import pygame as pg
+from rays import *
+
 
 class Player:
-    def __init__(self, x, y):
+    def __init__(self, x, y, map_grid):
         self.x = x
         self.y = y
         self.degree_in_radian = (2*np.pi)/360
-        self.rotation = 3/2*(np.pi)
-        self.velocity = 0.5
+        self.rotation = 3/2 * np.pi
+        self.velocity = 1
         self.font = pg.font.SysFont('comicsans', 40, True)
+        self.two_pi = 2 * np.pi
+        self.map_grid = map_grid
 
     def rotate_left(self):
-        self.rotation = (self.rotation + self.degree_in_radian * 0.5) % (2 * np.pi)
+        self.rotation = (self.rotation + self.degree_in_radian) % self.two_pi
 
     def rotate_right(self):
-        self.rotation = (self.rotation - self.degree_in_radian * 0.5) % (2 * np.pi)
+        self.rotation = (self.rotation - self.degree_in_radian) % self.two_pi
 
     def move_forward(self):
-        self.x = self.x + ((np.cos(self.rotation)) * self.velocity)
-        self.y = self.y - ((np.sin(self.rotation)) * self.velocity)
+        horizontal_ray = Ray(self.rotation, self.x, self.y, 'horizontal', self.map_grid)
+
+        vertical_ray = Ray(self.rotation, self.x, self.y, 'vertical', self.map_grid)
+
+        horizon_distance = np.hypot((horizontal_ray.x - self.x), (horizontal_ray.y - self.y))
+        vertical_distance = np.hypot((vertical_ray.x - self.x), (vertical_ray.y - self.y))
+
+        if min(horizon_distance, vertical_distance) >= horizontal_ray.unit_in_map // 3:
+            self.x = self.x + ((np.cos(self.rotation)) * self.velocity)
+            self.y = self.y - ((np.sin(self.rotation)) * self.velocity)
 
     def move_back(self):
-        self.x = self.x + ((np.cos(self.rotation)) * self.velocity * -1)
-        self.y = self.y - ((np.sin(self.rotation)) * self.velocity * -1)
+        horizontal_ray = Ray((self.rotation + np.pi) % self.two_pi, self.x, self.y, 'horizontal', self.map_grid)
+
+        vertical_ray = Ray((self.rotation + np.pi) % self.two_pi, self.x, self.y, 'vertical', self.map_grid)
+
+        horizon_distance = np.hypot((horizontal_ray.x - self.x), (horizontal_ray.y - self.y))
+        vertical_distance = np.hypot((vertical_ray.x - self.x), (vertical_ray.y - self.y))
+
+        if min(horizon_distance, vertical_distance) >= horizontal_ray.unit_in_map // 3:
+            self.x = self.x + ((np.cos(self.rotation)) * self.velocity * -1)
+            self.y = self.y - ((np.sin(self.rotation)) * self.velocity * -1)
 
     def rays(self, surface, map_grid):
-
         rotation = self.rotation + 30 * self.degree_in_radian
-        for i in range(60):
-            ray_x = None
-            ray_y = None
-            if rotation < np.pi:   # looking up
-                ray_y = (np.ceil(self.y / 125) * 125) - 125   # round to nearest 1020/8 down
-                ray_x = self.x - ((-1 / np.tan(rotation)) * (self.y - ray_y))
-                ray_y_offset = -125
-                ray_x_offset = ray_y_offset * (-1 / np.tan(rotation))
-            elif rotation > np.pi:    # looking down
-                ray_y = (np.ceil(self.y / 125) * 125)  # round to nearest 1020/8 up
-                ray_x = self.x - ((-1 / np.tan(rotation)) * (self.y - ray_y))
-                ray_y_offset = 125
-                ray_x_offset = ray_y_offset * (-1 / np.tan(rotation))
-            elif int(rotation * 100000) == int(np.pi * 100000):
-                ray_y = self.y
-                ray_x = self.x
+        pg.draw.rect(surface, (50, 50, 50), pg.Rect(1000, 0, 1000, 1000))
+        for i in range(120):
+            if i == 0:
+                rotation = rotation % self.two_pi
+
+            horizontal_ray = Ray(rotation, self.x, self.y, 'horizontal', map_grid)
+
+            vertical_ray = Ray(rotation, self.x, self.y, 'vertical', map_grid)
+
+            horizon_distance = np.hypot((horizontal_ray.x - self.x),  (horizontal_ray.y - self.y))
+            vertical_distance = np.hypot((vertical_ray.x - self.x), (vertical_ray.y - self.y))
+
+            if horizon_distance <= vertical_distance:
+                ray_color = (255, 0, 0)
+                pg.draw.line(surface, (255, 0, 0), (self.x, self.y), (horizontal_ray.x, horizontal_ray.y), 6)
+                distance = horizon_distance
             else:
-                ray_y = self.y
-                ray_x = -self.x
+                ray_color = (150, 0, 0)
+                distance = vertical_distance
+                pg.draw.line(surface, (0, 0, 255), (self.x, self.y), (vertical_ray.x, vertical_ray.y), 6)
+            cosine_angle = abs(rotation - self.rotation)
+            rotation = (rotation - (self.degree_in_radian / 2)) % self.two_pi
 
-            for d in range(10):
-                mx = int(ray_x / 125)
-                if rotation < np.pi:
-                    my = int(ray_y / 125) - 1
-                else:
-                    my = int(ray_y / 125)
-                if 0 <= mx <= 7 and 0 <= my <= 7 and map_grid[my][mx] == 1:
-                    break
-                else:
-                    ray_y += ray_y_offset
-                    ray_x += ray_x_offset
-            horizon_ray_x = ray_x
-            horizon_ray_y = ray_y
-            '''
-            ray_x = None
-            ray_y = None
-            negative_tangent = -np.tan(rotation)
-            if np.pi/2 < rotation < 3/2 * np.pi:  # looking left
-                ray_x = (np.ceil(self.x / 125) * 125) - 125  # round to nearest 1020/8 down
-                ray_y = self.y - negative_tangent * (self.x - ray_x)
-                ray_x_offset = 125
-                ray_y_offset = ray_x_offset * negative_tangent
-            elif int(rotation * 100000) == int(np.pi/2 * 100000) or int(rotation * 100000) == int(3/2 * np.pi * 100000):
-                ray_x = self.x
-                ray_y = self.y
-                ray_x_offset = 1020
-                ray_y_offset = 1020
-            elif rotation < np.pi/2 or rotation > 3/2 * np.pi:  # looking right
-                ray_x = (np.ceil(self.x / 125) * 125)  # round to nearest 1020/8 down
-                ray_y = self.y - negative_tangent * (self.x - ray_x)
-                ray_x_offset = -125
-                ray_y_offset = ray_x_offset * negative_tangent
-            for d in range(10):
-                if np.pi/2 < rotation < 3/2 * np.pi:
-                    mx = int(ray_x / 125) - 1
-                else:
-                    mx = int(ray_x / 125)
-                my = int(ray_y / 125)
-                if 0 <= mx <= 7 and 0 <= my <= 7 and map_grid[my][mx] == 1:
-                    break
-                else:
-                    ray_y -= ray_y_offset
-                    ray_x -= ray_x_offset
-            vertical_ray_x = ray_x
-            vertical_ray_y = ray_y
 
-            horizon_distance = np.hypot((horizon_ray_x - self.x),  (horizon_ray_y - self.y))
-            vertical_distance = np.hypot((vertical_ray_x - self.x), (vertical_ray_y - self.y))
-            '''
-            #if horizon_distance <= vertical_distance:
-                #ray_x = horizon_ray_x
-                #ray_y = horizon_ray_y
-            if rotation < np.pi:
-                pg.draw.line(surface, (0, 0, 255), (self.x, self.y), (ray_x, ray_y), 6)
-            else:
-                pg.draw.line(surface, (255, 0, 0), (self.x, self.y), (ray_x, ray_y), 6)
+            if cosine_angle < 0:
+                cosine_angle = self.two_pi
+            elif cosine_angle > self.two_pi:
+                cosine_angle -= self.two_pi
+            distance = distance * np.cos(cosine_angle)
 
-            #else:
-                #ray_x = vertical_ray_x
-                #ray_y = vertical_ray_y
-                #pg.draw.line(surface, (0, 255, 0), (self.x, self.y), (ray_x, ray_y), 6)
-            rotation = (rotation - self.degree_in_radian) % (2 * np.pi)
+            if distance == 0:
+                distance = 1
+            line_height = (2**(abs(np.log2(len(map_grid)) - 9))*1000) / distance
+            if line_height > 1000:
+                line_height = 1000
+            line_offset = 1000 + line_height/2
 
+            pg.draw.line(surface, ray_color, (8 * i + 1000, (line_height + 1500 - line_offset)), (8 * i + 1000, 1500 - line_offset), 8)
